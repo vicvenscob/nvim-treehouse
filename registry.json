@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "updated": "2026-05-22T00:00:00Z",
+  "parsers": {
+    "rust": {
+      "version": "0.21.2",
+      "repo": "https://github.com/tree-sitter/tree-sitter-rust",
+      "binaries": {
+        "x86_64-linux": "https://github.com/vicvenscob/nvim-treehouse/releases/download/parsers-0.21.2/rust-x86_64-linux.so",
+        "aarch64-linux": "https://github.com/vicvenscob/nvim-treehouse/releases/download/parsers-0.21.2/rust-aarch64-linux.so",
+        "x86_64-darwin": "https://github.com/vicvenscob/nvim-treehouse/releases/download/parsers-0.21.2/rust-x86_64-darwin.so",
+        "aarch64-darwin": "https://github.com/vicvenscob/nvim-treehouse/releases/download/parsers-0.21.2/rust-aarch64-darwin.so",
+        "x86_64-windows": "https://github.com/vicvenscob/nvim-treehouse/releases/download/parsers-0.21.2/rust-x86_64-windows.dll"
+      },
+      "queries": {
+        "highlights": "https://raw.githubusercontent.com/tree-sitter/tree-sitter-rust/master/queries/highlights.scm",
+        "folds": "https://raw.githubusercontent.com/tree-sitter/tree-sitter-rust/master/queries/folds.scm",
+        "injections": "https://raw.githubusercontent.com/tree-sitter/tree-sitter-rust/master/queries/injections.scm"
+      },
+      "filetypes": [
+        "rust"
+      ]
+    }
+  }
+}
