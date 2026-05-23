@@ -1,0 +1,141 @@
+name: Build and Release Parsers
+
+on:
+  workflow_dispatch:
+    inputs:
+      lang:
+        description: "Language to build (e.g. rust, lua, python) or 'all'"
+        required: true
+        default: "all"
+  push:
+    paths:
+      - "registry.json"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Build for ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-linux
+            ext: so
+
+          - os: ubuntu-22.04
+            target: aarch64-linux
+            ext: so
+
+          - os: macos-13
+            target: x86_64-darwin
+            ext: so
+
+          - os: macos-latest
+            target: aarch64-darwin
+            ext: so
+
+          - os: windows-2022
+            target: x86_64-windows
+            ext: dll
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install aarch64 cross compiler
+        if: matrix.target == 'aarch64-linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Setup MSVC
+        if: matrix.target == 'x86_64-windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install tree-sitter CLI
+        run: npm install -g tree-sitter-cli
+
+      - name: Read registry langs
+        id: registry
+        shell: bash
+        run: |
+          echo "langs=$(jq -r '.parsers | keys | join(" ")' registry.json)" >> $GITHUB_OUTPUT
+
+      - name: Build parsers
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          EXT: ${{ matrix.ext }}
+        run: |
+          mkdir -p dist
+
+          LANGS="${{ steps.registry.outputs.langs }}"
+          if [ "${{ github.event.inputs.lang }}" != "" ] && [ "${{ github.event.inputs.lang }}" != "all" ]; then
+            LANGS="${{ github.event.inputs.lang }}"
+          fi
+
+          for lang in $LANGS; do
+            echo "==> Building $lang for $TARGET"
+            REPO=$(jq -r ".parsers[\"$lang\"].repo" registry.json)
+            git clone --depth 1 "$REPO" /tmp/$lang
+            cd /tmp/$lang
+
+            if [ "$TARGET" = "aarch64-linux" ]; then
+              CC=aarch64-linux-gnu-gcc \
+              CFLAGS="-march=armv8-a" \
+              tree-sitter build --output "$GITHUB_WORKSPACE/dist/${lang}-${TARGET}.${EXT}"
+            else
+              tree-sitter build --output "$GITHUB_WORKSPACE/dist/${lang}-${TARGET}.${EXT}"
+            fi
+
+            cd "$GITHUB_WORKSPACE"
+            echo "==> Done: ${lang}-${TARGET}.${EXT}"
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: parsers-${{ matrix.target }}
+          path: dist/
+
+  release:
+    name: Upload to release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Get version tag
+        id: tag
+        run: |
+          VERSION=$(jq -r '.parsers | to_entries[0].value.version' registry.json)
+          echo "tag=parsers-$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Parser Binaries ${{ steps.tag.outputs.tag }}"
+          files: dist/**/*
+          make_latest: false
